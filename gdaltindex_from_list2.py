@@ -26,7 +26,7 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFolderDestination,
                        QgsProcessingOutputString)
 
-class gdaltindex_from_list(QgsProcessingAlgorithm):
+class gdaltindex_from_list2(QgsProcessingAlgorithm):
     """
     Use tile index file to perform gdal functions. Tile feature must have attribute
     with path/to/raster/tiles.  
@@ -39,7 +39,7 @@ class gdaltindex_from_list(QgsProcessingAlgorithm):
     # used when calling the algorithm from another algorithm, or when
     # calling from the QGIS console.
 
-    INPUT = 'INPUT'
+    INPUT_FILE = 'input_file'
     OUTPUT = 'output'
     OUTPUT_DIR = 'output_dir'
     BASE_FILENAME = 'base_filename'
@@ -51,7 +51,7 @@ class gdaltindex_from_list(QgsProcessingAlgorithm):
         return QCoreApplication.translate('Processing', string)
 
     def createInstance(self):
-        return gdal_from_slxn()
+        return gdaltindex_from_list2()
 
     def name(self):
         """
@@ -104,10 +104,10 @@ class gdaltindex_from_list(QgsProcessingAlgorithm):
         # We add the input vector features source. It can have any kind of
         # geometry.
         self.addParameter(
-            QgsProcessingParameterFeatureSource(
-                self.INPUT,
-                self.tr('Input Layer'),
-                [QgsProcessing.TypeVectorAnyGeometry]
+            QgsProcessingParameterFile(
+                self.INPUT_FILE,
+                self.tr('Input File with list of rasters to create index'),
+                extension='txt'
             )
         )
         
@@ -139,9 +139,9 @@ class gdaltindex_from_list(QgsProcessingAlgorithm):
         # Retrieve the feature source and sink. The 'dest_id' variable is used
         # to uniquely identify the feature sink, and must be included in the
         # dictionary returned by the processAlgorithm function.
-        source = self.parameterAsSource(
+        fp_optfile = self.parameterAsString(
             parameters,
-            self.INPUT,
+            self.INPUT_FILE,
             context)
         output_dir = self.parameterAsString(
             parameters,
@@ -152,42 +152,15 @@ class gdaltindex_from_list(QgsProcessingAlgorithm):
             self.BASE_FILENAME,
             context)
         
-
-        # If source was not found, throw an exception to indicate that the algorithm
-        # encountered a fatal error. The exception text can be any string, but in this
-        # case we use the pre-built invalidSourceError method to return a standard
-        # helper text for when a source cannot be evaluated
-        if source is None:
-            raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
-
-        #(sink, dest_id) = self.parameterAsSink(
-        #    parameters,
-        #    self.OUTPUT,
-        #    context, source.fields(),source.wkbType(),source.sourceCrs())
-
-        # #Send some information to the user
-        # feedback.pushInfo('CRS is {}'.format(source.sourceCrs().authid()))
-        fp_optfile = '{}.txt'.format(os.path.join(output_dir, base_filename))
-        features = source.getFeatures()
-        vals = [f[location_field] for f in features]
-        with open(fp_optfile, 'w') as list_out:
-            basic_str = '\n'.join(vals)
-            list_out.write(basic_str)    
-
-        vrt_out = '{}.vrt'.format(os.path.join(output_dir, base_filename))
+        shp_out = '{}.shp'.format(os.path.join(output_dir, base_filename))
         
         import subprocess
-
-        # constants
-        gdalbuildvrt = r'"C:\Program Files\QGIS 3.22.6\bin\gdalbuildvrt.exe"'
-        cmd = '-input_file_list "{}" "{}"'.format(fp_optfile, vrt_out)
-
-        fullCmd = ' '.join([gdalbuildvrt, cmd])
-        with open(os.path.join(output_dir, 'command_call.txt'),'w') as txt_file2:
-            txt_file2.write(fullCmd)
-        subprocess.run(fullCmd)
         
-        results= {self.OUTPUT: fullCmd}
+        # constants
+        cmd = f'gdaltindex "{shp_out}" --optfile "{fp_optfile}"'
+        subprocess.run(cmd)
+        
+        results= {self.OUTPUT: cmd}
         
         # Return the results of the algorithm. In this case our only result is
         # the feature sink which contains the processed features, but some
